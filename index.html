@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meuse – zonages, paysages et cadastre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: outil de travail SAFER, sobre, direct, beaucoup d'air
+   IDEA: une table de lecture cartographique, la carte en grand, la fiche à droite comme un registre
+   PICTURE: la Meuse et 30 km alentour, frontière marquée, zonages superposables, cadastre au zoom
+   COLOUR and TYPE: fond blanc, terres crème, eau bleue, hachures orange ; Overpass
+   LAYOUT: bandeau de titre centré, carte pleine largeur, colonne droite recherche + fiche + couches */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0f1a20);--ink:light-dark(#13242e,#e6ecef);--mute:light-dark(#5b6870,#9fb0b8);
+--land:light-dark(#fbfbf2,#16262e);--out:light-dark(#efeee6,#0c151a);--line:light-dark(#d8d4c6,#2b3b43);--edge:light-dark(#2a2a24,#e6ecef);
+--water:light-dark(#2f7fc1,#5aa6e0);--pr:light-dark(#d9480f,#ff8a4c);--sel:light-dark(#d6127e,#ff5cad);--rule:light-dark(#e6e3da,#24343c);--veil:light-dark(#ffffff,#0c151a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 Overpass,system-ui,sans-serif;overflow-x:clip}
+.top{text-align:center;padding:14px 16px 10px;border-bottom:1px solid var(--rule)}
+h1{font-weight:800;font-size:clamp(22px,2.4vw,30px);line-height:1.1;margin:0 0 4px;text-wrap:balance}
+.top p{margin:0 auto;max-width:900px;color:var(--mute);font-size:15px}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 400px;grid-template-rows:minmax(0,1fr);height:calc(100vh - 92px);min-height:560px}
+@media(max-width:900px){.app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;height:auto}.mapbox{height:72vh}}
+.mapbox{position:relative;border-right:1px solid var(--rule);min-height:0;overflow:hidden}
+#map{display:block;width:100%;height:100%;touch-action:none;cursor:grab;background:var(--out)}
+#map.drag{cursor:grabbing}
+.side{overflow-y:auto;min-height:0;padding:18px 20px 40px}
+@media(max-width:900px){.side{overflow:visible}}
+.side>section{margin-bottom:24px}
+h2{font-size:19px;margin:0 0 10px;font-weight:800}
+h2::before{content:"→ ";color:var(--pr)}
+.zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.bm{position:absolute;left:10px;top:10px;display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg);max-width:calc(100% - 80px)}
+.bm label{display:flex;align-items:center;min-height:40px;padding:0 12px;font-size:14px;font-weight:600;cursor:pointer}
+.bm input{position:absolute;opacity:0;pointer-events:none}
+.bm label:has(input:checked){background:var(--ink);color:var(--bg)}
+.bm label:has(input:focus-visible){outline:2px solid var(--sel);outline-offset:-2px}
+.attr{position:absolute;right:6px;bottom:4px;font-size:11px;color:var(--mute);background:var(--bg);padding:0 6px;border-radius:4px;opacity:.85}
+#hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;display:none;pointer-events:none}
+button{font:600 15px Overpass,sans-serif;min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;cursor:pointer;padding:0 12px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+#tip{position:absolute;pointer-events:none;background:var(--bg);border:1px solid var(--line);padding:4px 8px;border-radius:6px;font-size:13px;max-width:280px;display:none;box-shadow:0 2px 8px #0002}
+label.f{display:block;font-size:13px;color:var(--mute);margin:8px 0 3px}
+input[type=search],input[type=text],select{width:100%;font:16px Overpass,sans-serif;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+input:disabled,select:disabled{opacity:.5}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;margin-top:10px}
+#pmsg{font-size:13px;color:var(--mute);margin:6px 0 0;min-height:1.2em}
+details.grp{border-top:1px solid var(--rule)}
+details.grp summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;font-weight:700;font-size:15px}
+details.grp summary::-webkit-details-marker{display:none}
+details.grp summary::after{content:"▸";margin-left:auto;color:var(--mute);transition:transform .15s}
+details.grp[open] summary::after{transform:rotate(90deg)}
+details.grp .items{padding:0 0 8px 26px}
+.items label{display:flex;align-items:center;gap:10px;min-height:34px;cursor:pointer;font-size:15px}
+.sw{width:22px;height:14px;border-radius:3px;flex:none;display:inline-block}
+.legend{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr;gap:3px;font-size:14px}
+.legend li{display:flex;gap:10px;align-items:center}
+.legend b{font-weight:600;margin-left:auto;font-variant-numeric:tabular-nums}
+#card h3{font-size:19px;margin:0 0 6px;line-height:1.25}
+#card .k{color:var(--mute);font-size:14px;margin:8px 0 2px}
+#card ul{margin:2px 0 8px;padding-left:18px}
+#card li{margin:2px 0;font-size:15px}
+.ha{color:var(--mute);font-size:13px;white-space:nowrap}
+.edge{color:var(--mute)}
+.lnk{display:inline;background:none;border:0;padding:0;min-height:0;min-width:0;color:var(--ink);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;font:inherit;text-align:left;cursor:pointer}
+.lnk:hover{text-decoration-color:var(--sel)}
+a{color:var(--ink);text-decoration-color:var(--line);text-underline-offset:3px}
+.gp{display:inline-block;margin:6px 0;font-weight:600}
+.acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:8px}
+.muted{color:var(--mute);font-size:14px}
+.tbd{color:#d97706;font-weight:600}
+.band{padding:clamp(28px,4vw,56px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:28px;margin-bottom:34px}
+.fig1 strong{display:block;font-size:clamp(28px,3.2vw,36px);font-weight:800;line-height:1.1;white-space:nowrap}
+.fig1 span{color:var(--mute);font-size:14px}
+.prl{list-style:none;padding:0;margin:0;columns:2 300px;column-gap:36px}
+.prl li{break-inside:avoid;padding:8px 0;border-bottom:1px solid var(--rule)}
+.prl small{color:var(--mute);display:block;font-size:14px}
+.notes p{max-width:820px;margin:0 0 12px}
+.uses{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:28px;margin-bottom:36px}
+.uses h3{font-size:17px;margin:0 0 4px}
+.uses h3::before{content:"→ ";color:var(--pr)}
+.uses p{margin:0;color:var(--mute);font-size:15px}
+svg text{font-family:Overpass,sans-serif;paint-order:stroke;stroke:var(--land);stroke-linejoin:round;fill:var(--ink);font-weight:600;pointer-events:none}
+#map.photo text{stroke:#000a;fill:#fff}
+.tx-o{fill:var(--mute)}
+.nb{fill:light-dark(#f2f1ea,#121f26);stroke:var(--line);vector-effect:non-scaling-stroke}
+.veil{fill:var(--veil);fill-opacity:.42;pointer-events:none}
+#map.photo .veil,#map.plan .veil{fill-opacity:.32}
+.depl{fill:none;stroke:var(--edge);stroke-width:2.8;vector-effect:non-scaling-stroke;pointer-events:none}
+#map.photo .depl{stroke:#fff}
+.dpl{fill:none;stroke:var(--mute);stroke-width:1.2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.fl{fill:none;stroke:var(--water);stroke-width:1.6;stroke-opacity:.6;vector-effect:non-scaling-stroke;pointer-events:none}
+.com{fill:transparent;stroke:var(--line);vector-effect:non-scaling-stroke;stroke-width:.5}
+#map.photo .com{stroke:#ffffff88}
+#map.plan .com{stroke:#5b687088}
+.com:hover{fill:light-dark(#13242e10,#ffffff14)}
+.com.on{fill:light-dark(#d6127e14,#ff5cad22);stroke:var(--sel)!important;stroke-width:2}
+.ens{vector-effect:non-scaling-stroke;stroke-width:1;fill-rule:evenodd;cursor:pointer}
+.ens:hover,.ens.on{stroke:var(--sel);stroke-width:2.4}
+.riv{fill:none;stroke:var(--water);vector-effect:non-scaling-stroke;stroke-width:2.4;stroke-linecap:round;cursor:pointer}
+.riv:hover,.riv.on{stroke:var(--sel)}
+.prp{fill:url(#hatch);stroke:var(--pr);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-dasharray:6 3;pointer-events:none}
+.prp.on{stroke-width:3.2;stroke-dasharray:none}
+.z{vector-effect:non-scaling-stroke;fill-rule:evenodd;cursor:pointer}
+.z.on,.z:hover{stroke:var(--sel)!important;stroke-width:2.6}
+.zo{pointer-events:visibleStroke}
+.wt{cursor:pointer}
+.wt.on{stroke:var(--sel)!important}
+.parc{fill:transparent;stroke:#8d6e4a;stroke-width:.7;vector-effect:non-scaling-stroke;cursor:pointer;pointer-events:all}
+#map.photo .parc{stroke:#ffe082}
+.parc:hover{fill:#d6127e22}
+.parc.on{stroke:var(--sel)!important;stroke-width:2.8;fill:#d6127e2e}
+.epl{fill:none;stroke:#37474f;stroke-width:2.2;stroke-dasharray:12 4 3 4;vector-effect:non-scaling-stroke;pointer-events:none}
+#map.photo .epl{stroke:#fff}
+.gmz{pointer-events:none}
+.gmline{fill:none;stroke:#111;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}
+#map .etx text{font-weight:800;fill:#37474f;letter-spacing:.02em}
+#map.photo .etx text{fill:#fff}
+#map .dlab text{font-weight:800;letter-spacing:.18em;fill:var(--mute);font-style:italic}
+#map.photo .dlab text{fill:#fff}
+.hide{display:none}
+@media(prefers-reduced-motion:no-preference){.ens,.com{transition:stroke-width .15s}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Meuse : zonages, paysages et cadastre</h1>
+  <p>Trouve une commune ou une parcelle et vois ce qui la concerne : ENS, ZNIEFF, Natura 2000, sites protégés, paysages, secteur géomarché. La Meuse en détail, 30 km autour pour le contexte.</p>
+</header>
+
+<div class="app">
+  <div class="mapbox">
+    <svg id="map" role="img" aria-label="Carte de la Meuse et de ses abords avec les zonages environnementaux, paysagers et le cadastre"></svg>
+    <div class="bm" role="radiogroup" aria-label="Fond de carte">
+      <label><input type="radio" name="bm" value="simple" checked>Simple</label>
+      <label><input type="radio" name="bm" value="plan">Plan IGN</label>
+      <label><input type="radio" name="bm" value="photo">Photo</label>
+      <label><input type="radio" name="bm" value="gm">Géomarché</label>
+    </div>
+    <div class="zoom">
+      <button id="zin" aria-label="Zoomer">+</button>
+      <button id="zout" aria-label="Dézoomer">−</button>
+      <button id="zres" aria-label="Vue d'ensemble">⤢</button>
+    </div>
+    <div class="attr" id="attr"></div>
+    <div id="tip"></div>
+    <div id="hint">Zoome davantage pour afficher le cadastre</div>
+  </div>
+
+  <aside class="side">
+    <section>
+      <h2>Commune</h2>
+      <input id="q" type="search" list="coms" autocomplete="off" aria-label="Rechercher une commune">
+      <datalist id="coms"></datalist>
+    </section>
+    <section>
+      <h2>Parcelle (Meuse)</h2>
+      <label class="f" for="pc">1. Commune</label>
+      <input id="pc" type="search" list="pcoms" autocomplete="off">
+      <datalist id="pcoms"></datalist>
+      <div class="row">
+        <div><label class="f" for="ps">2. Section</label><select id="ps" disabled></select></div>
+        <div><label class="f" for="pn">3. Numéro</label><input id="pn" type="text" inputmode="numeric" list="pnums" autocomplete="off" disabled><datalist id="pnums"></datalist></div>
+      </div>
+      <div class="row2"><p id="pmsg">Choisis d'abord une commune de la Meuse.</p><button id="pgo" disabled>Localiser</button></div>
+    </section>
+    <section id="card" aria-live="polite">
+      <h3>Clique sur la carte</h3>
+      <p class="muted">Une commune, un site ou une parcelle : sa fiche s'affiche ici, avec un bouton pour copier le résumé.</p>
+    </section>
+    <section id="gmleg" class="hide">
+      <h2>Secteurs du géomarché</h2>
+      <ul class="legend" id="gml"></ul>
+      <p class="muted">Ta carte v9, calée sur les limites communales. Noms et prix : <span class="tbd">à compléter</span>.</p>
+    </section>
+    <section>
+      <h2>Couches</h2>
+      <div id="layers"></div>
+    </section>
+    <section>
+      <details class="grp"><summary>Types de milieux ENS (Meuse)</summary><ul class="legend" id="legend" style="padding:0 0 8px"></ul></details>
+    </section>
+  </aside>
+</div>
+
+<section class="band wrap">
+  <h2>Ce que tu peux faire ici</h2>
+  <div class="uses">
+    <div><h3>Situer une commune</h3><p>Tape son nom : la fiche liste les ENS, zonages et paysages qui la recoupent, avec la surface concernée, sa communauté de communes et son secteur géomarché.</p></div>
+    <div><h3>Situer une parcelle</h3><p>Commune, puis section et numéro, ou clic direct sur la carte zoomée. La fiche donne la contenance, le secteur géomarché et tous les zonages qui la touchent.</p></div>
+    <div><h3>Préparer un commentaire</h3><p>« Copier le résumé » produit une phrase prête à coller. Le lien Géoportail ouvre la photo haute définition et le cadastre officiel pour vérifier.</p></div>
+  </div>
+  <div class="figs" id="figs"></div>
+  <h2>Les paysages remarquables</h2>
+  <ul class="prl" id="prl"></ul>
+</section>
+
+<section class="band wrap notes">
+  <h2>Sources et limites</h2>
+  <p><b>ENS de la Meuse</b> : inventaire du Département, mise à jour du <span id="maj"></span> ; sites déclassés non affichés. <b>ENS de Meurthe-et-Moselle</b> : données ouvertes du Département 54. Les autres départements voisins (Ardennes, Marne, Haute-Marne, Moselle, Vosges) ne publient pas leurs ENS en données ouvertes : ils ne figurent pas sur la carte.</p>
+  <p><b>Paysages remarquables</b> : DREAL Lorraine (étude de 1995, fichier de 2012), tracés à dire d'expert, sans valeur de servitude. Ils n'existent que pour l'ex-Lorraine : rien côté Ardennes, Marne ni Haute-Marne.</p>
+  <p><b>Zonages</b> : ZNIEFF, Natura 2000, arrêtés de biotope, réserves, Ramsar, PNR et sites géologiques de l'INPN ; sites classés et inscrits ; via la Géoplateforme IGN. Bien UNESCO, carrières, éoliennes et plans de paysage : carte « Carte générale en Grand Est » de la DREAL (Géo-IDE). Hors Meuse, les carrières sont figurées par un disque de surface équivalente. Seules les éoliennes construites ou autorisées sont dessinées.</p>
+  <p><b>Cadastre</b> : Parcellaire Express de l'IGN, Meuse seulement, chargé au zoom. Contenance cadastrale, pas surface mesurée. <b>Géomarché</b> : ta carte v9, Meuse seulement, calée à environ 40 m près.</p>
+  <p><b>Fonds</b> : Plan IGN et orthophotographie IGN chargés en direct depuis la Géoplateforme : nets jusqu'au niveau de la parcelle, une connexion internet est nécessaire. Le lien Géoportail de chaque fiche ouvre le cadastre officiel. Limites communales et intercommunales : IGN Admin Express 2026.</p>
+  <p><b>Croisements</b> : un zonage est rattaché à une commune dès 1 ha de recoupement, surface indiquée. « Contact en limite » signale moins de 0,5 % de la commune, souvent un décalage entre tracés. Les tracés sont simplifiés à quelques dizaines de mètres : pour un acte ou un avis, vérifie toujours sur la couche d'origine.</p>
+</section>
+
+<script>window.LIVE_TILES=1;</script>
+<script>
+{
+const LIVE=!!window.LIVE_TILES;
+const NS='http://www.w3.org/2000/svg';
+const COL={A:'#3a8fb7',B:'#8a5a44',C:'#6f8f5a',D:'#c27c2c',E:'#2c5fa8',F:'#2f6b3a',G:'#8a7aa8',H:'#9cbf4a',M:'#5a6fc0',P:'#d4b13a',R:'#2f7fc1',V:'#c27c2c',Z:'#8a7aa8'};
+const ZS={pnr:['#2e7d32','none',0,'10 5',1],ramsar:['#0097a7','none',0,'4 3',1],znieff2:['#7cb342','#7cb342',.10,'',1],zps:['#1565c0','#1565c0',.08,'7 3',1],
+ zsc:['#5e35b1','#5e35b1',.16,'',0],znieff1:['#558b2f','#9ccc65',.30,'',0],pp:['#ef6c00','none',0,'2 3',1],sc:['#8e24aa','#ba68c8',.35,'',0],si:['#8e24aa','#ce93d8',.15,'5 3',0],
+ unt:['#b8860b','none',0,'6 3',1],un:['#b8860b','#ffd54f',.7,'',0],apb:['#c62828','#ef5350',.35,'',0],aphn:['#c62828','#ef5350',.35,'',0],rnr:['#ad1457','#f06292',.35,'',0],rnn:['#ad1457','#f06292',.35,'',0],rb:['#ad1457','#f06292',.35,'',0],
+ rncfs:['#6d4c41','#a1887f',.25,'',0],inpg:['#795548','#bcaaa4',.5,'',0],q:['#455a64','#90a4ae',.75,'',0]};
+const GROUPS=[
+ ['ENS',[['ens','ENS de la Meuse','#5f8f4e',1],['riv',"Cours d'eau ENS (Meuse)",'var(--water)',1],['ens54','ENS de Meurthe-et-Moselle','#3d6b4f',1]]],
+ ['Inventaires',[['znieff1','ZNIEFF de type 1'],['znieff2','ZNIEFF de type 2']]],
+ ['Natura 2000',[['zsc','ZSC (habitats)'],['zps','ZPS (oiseaux)']]],
+ ['Protections réglementaires',[['apb','Arrêtés de biotope',null,0,['apb','aphn']],['res','Réserves naturelles, biologiques, de chasse',null,0,['rnr','rnn','rb','rncfs']],['sc','Sites classés'],['si','Sites inscrits']]],
+ ['Paysage et patrimoine',[['prp','Paysages remarquables','pr',1],['pp','Plans de paysage'],['un','UNESCO Grande Guerre',null,0,['un','unt']],['inpg','Sites géologiques']]],
+ ['Labels',[['pnr','Parcs naturels régionaux'],['ramsar','Sites Ramsar']]],
+ ['Activités',[['q','Carrières en activité'],['wind','Éoliennes','#263238']]],
+ ['Repères',[['cad','Cadastre (au zoom, Meuse)','#8d6e4a',1],['epci','Communautés de communes','#37474f',1],['com','Limites communales','line',1]]]];
+const ORDER=['znieff1','znieff2','zsc','zps','apb','aphn','rnn','rnr','rb','rncfs','sc','si','un','unt','pnr','ramsar','pp','inpg','q'];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[-']/g,' ').replace(/\s+/g,' ').trim();
+const fmt=(n,d=0)=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:d,minimumFractionDigits:d});
+const svg=document.getElementById('map'),tip=document.getElementById('tip'),card=document.getElementById('card');
+const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const R=6378137,W2=Math.PI*R;
+const ETAT={3:'autorisé, non construit',5:'construit'};
+
+Promise.all([fetch('data.json').then(r=>r.json()),fetch('zon.json').then(r=>r.json())]).then(([D,Zd])=>{
+  const ENS=new Map(D.ens.map(e=>[e.c,e])),E54=new Map(D.ens54.map(e=>[e.c,e])),RIV=new Map(D.riv.map(r=>[r.c,r])),PR=new Map(D.pr.map(p=>[p.id,p])),COM=new Map(D.com.map(c=>[c.c,c]));
+  const Z=Zd.z,LAB=Zd.lab,WIND=Zd.w;
+  document.getElementById('maj').textContent=D.maj;
+  const P0=D.proj;
+  const V0=D.vb.slice();let V=V0.slice();let K=1;
+  const toLL=(x,y)=>{const mx=x*P0.s+P0.mx0,my=P0.my1-y*P0.s;return [mx/R*180/Math.PI,(2*Math.atan(Math.exp(my/R))-Math.PI/2)*180/Math.PI];};
+  const gpLink=(x,y,z)=>{const [lon,lat]=toLL(x,y);return `https://www.geoportail.gouv.fr/carte?c=${lon.toFixed(5)},${lat.toFixed(5)}&z=${z}&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;};
+  const defs=el('defs',{},svg);
+  const pat=el('pattern',{id:'hatch',width:60,height:60,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('line',{x1:0,y1:0,x2:0,y2:60,style:'stroke:var(--pr);stroke-width:10;stroke-opacity:.45'},pat);
+  const G={};['nb','land','tiles','live','gm','veil','zbig','com','epl','zsmall','prp','eau','riv','ens','e54','dot','wind','cad','dep','txt','ctx','etx','dlab'].forEach(k=>G[k]=el('g',{},svg));
+  ['txt','ctx','etx','dlab'].forEach(k=>G[k].setAttribute('text-anchor','middle'));G.dlab.classList.add('dlab');G.ctx.classList.add('ctx');G.etx.classList.add('etx');
+  el('rect',{x:-6000,y:-6000,width:16000,height:16000,style:'fill:var(--out)'},G.nb);
+  D.nb.forEach(n=>el('path',{d:n.p,class:'nb'},G.nb));
+  el('path',{d:D.zone,style:'fill:var(--land)'},G.land);
+  el('path',{d:D.outer,class:'veil'},G.veil);
+  D.gm.forEach(g=>el('path',{d:g.p,class:'gmz',style:`fill:${g.col};fill-opacity:.88`},G.gm));el('path',{d:D.gml,class:'gmline'},G.gm);
+  // tuiles
+  const tileM=z=>2*W2/2**z;
+  const TL={};D.tiles.forEach(t=>{(TL[t[0]+t[1]]=TL[t[0]+t[1]]||[]).push(t);});
+  const tg={};let base='simple';const made=new Set();
+  const tb=t=>{const s=tileM(t[1]);const mx=-W2+t[2]*s,my=W2-t[3]*s;return [(mx-P0.mx0)/P0.s,(P0.my1-my)/P0.s,t[4]*s/P0.s,t[5]*s/P0.s];};
+  const liveG={};const WMTS={O:['ORTHOIMAGERY.ORTHOPHOTOS','image/jpeg'],P:['GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2','image/png']};
+  function drawLive(k,mpp){for(const key in liveG)liveG[key].classList.add('hide');
+    if(!LIVE)return;let z=Math.round(Math.log2(2*W2/(256*mpp)));z=Math.min(k==='O'?19:18,z);if(z<=(k==='O'?14:13))return;
+    const key=k+z;for(const kk in liveG)if(kk!==key){liveG[kk].remove();delete liveG[kk];for(const id of [...made])if(id.startsWith(kk+'_'))made.delete(id);}
+    if(!liveG[key])liveG[key]=el('g',{},G.live);liveG[key].classList.remove('hide');
+    const s=tileM(z),n=2**z;const x0=Math.floor((V[0]*P0.s+P0.mx0+W2)/s),x1=Math.floor(((V[0]+V[2])*P0.s+P0.mx0+W2)/s);
+    const y0=Math.floor((W2-(P0.my1-V[1]*P0.s))/s),y1=Math.floor((W2-(P0.my1-(V[1]+V[3])*P0.s))/s);
+    if((x1-x0+1)*(y1-y0+1)>400)return;
+    for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){if(x<0||y<0||x>=n||y>=n)continue;const id=key+'_'+x+'_'+y;if(made.has(id))continue;made.add(id);
+      const [lay,f]=WMTS[k];const href=`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${lay}&STYLE=normal&FORMAT=${f}&TILEMATRIXSET=PM&TILEMATRIX=${z}&TILEROW=${y}&TILECOL=${x}`;
+      el('image',{href,x:((x*s-W2)-P0.mx0)/P0.s,y:(P0.my1-(W2-y*s))/P0.s,width:s/P0.s+.02,height:s/P0.s+.02,preserveAspectRatio:'none'},liveG[key]);}}
+  function drawTiles(){if(base==='simple'||base==='gm'){for(const key in liveG)liveG[key].classList.add('hide');return;}const k=base==='photo'?'O':'P';const zs=k==='O'?[9,11,13,14]:[9,11,13];
+    const mpp=P0.s/K;let zt=zs[0];for(const z of zs){if(tileM(z)/256<=mpp*1.6){zt=z;break;}zt=z;}
+    const show=new Set([k+9,k+11,k+zt]);
+    for(const key in tg)tg[key].classList.toggle('hide',!show.has(key));
+    for(const key of show){if(!tg[key])tg[key]=el('g',{},G.tiles);tg[key].classList.remove('hide');
+      for(const t of TL[key]||[]){const [x,y,w,h]=tb(t);if(x>V[0]+V[2]||x+w<V[0]||y>V[1]+V[3]||y+h<V[1])continue;if(made.has(t[6]))continue;made.add(t[6]);
+        el('image',{href:'t/'+t[6],x,y,width:w,height:h,preserveAspectRatio:'none'},tg[key]);}}
+    drawLive(k,mpp);}
+  function setBase(b){base=b;svg.classList.toggle('photo',b==='photo');svg.classList.toggle('plan',b==='plan');
+    G.tiles.classList.toggle('hide',b==='simple'||b==='gm');G.live.classList.toggle('hide',b==='simple'||b==='gm');G.land.classList.toggle('hide',b!=='simple'&&b!=='gm');G.gm.classList.toggle('hide',b!=='gm');
+    document.getElementById('gmleg').classList.toggle('hide',b!=='gm');
+    for(const key in tg)if(key[0]!==(b==='photo'?'O':'P'))tg[key].classList.add('hide');
+    document.getElementById('attr').textContent=b==='gm'?'Géomarché v9 (Meuse) · limites © IGN':b==='simple'?'Limites © IGN':b==='plan'?'Plan IGN © IGN – Géoplateforme':'Orthophoto © IGN – Géoplateforme';drawTiles();}
+  document.querySelectorAll('input[name=bm]').forEach(r=>r.addEventListener('change',e=>setBase(e.target.value)));
+  // couches de données
+  const zEls=new Map();
+  Z.forEach(z=>{const s=ZS[z.k];if(!s)return;const big=s[4];
+    const p=el('path',{d:z.p,class:'z '+(big?'zo':''),'data-z':z.i,style:`stroke:${s[0]};fill:${s[1]};fill-opacity:${s[2]};stroke-width:${big?2:1.2};${s[3]?'stroke-dasharray:'+s[3]:''}`},big?G.zbig:G.zsmall);
+    zEls.set(z.i,p);});
+  D.com.forEach(c=>el('path',{d:c.p,class:'com','data-c':c.c},G.com));
+  D.epci.forEach(e=>{el('path',{d:e.p,class:'epl'},G.epl);const t=el('text',{x:e.x,y:e.y},G.etx);t.textContent=e.n;});
+  D.deplines.forEach(d=>el('path',{d:d.p,class:'dpl'},G.dep));
+  el('path',{d:D.dep,class:'depl'},G.dep);
+  D.pr.forEach(p=>el('path',{d:p.p,class:'prp','data-id':p.id},G.prp));
+  el('path',{d:D.meuse,class:'fl'},G.eau);
+  D.riv.forEach(r=>el('path',{d:r.p,class:'riv','data-r':r.c},G.riv));
+  D.ens.forEach(e=>{el('path',{d:e.p,class:'ens','data-e':e.c,fill:COL[e.t],'fill-opacity':.72,stroke:COL[e.t]},G.ens);
+    if(e.ha<25)el('circle',{cx:e.x,cy:e.yy,r:3,fill:COL[e.t],class:'ens','data-e':e.c},G.dot);});
+  D.ens54.forEach(e=>el('path',{d:e.p,class:'ens','data-e54':e.c,fill:COL[e.t]||'#3d6b4f','fill-opacity':.6,stroke:COL[e.t]||'#3d6b4f','stroke-dasharray':e.st==='CANDIDAT'?'4 3':''},G.e54));
+  WIND.forEach((w,i)=>w.pts.forEach(([x,y])=>el('circle',{cx:x,cy:y,r:3,class:'wt','data-w':i,style:w.e===5?'fill:#263238;stroke:#fff':'fill:#fff;stroke:#263238'},G.wind)));
+  (D.deplab||[]).forEach(d=>{const t=el('text',{x:d.x,y:d.y},G.dlab);t.textContent=d.n.toUpperCase();});
+  D.towns.forEach(t=>{const x=el('text',{x:t.x,y:t.y,class:t.o?'tx-o':''},G.txt);x.textContent=t.n;});
+  D.com.forEach(c=>{const t=el('text',{x:c.x,y:c.y,class:c.d!=='55'?'tx-o':''},G.ctx);t.textContent=c.n;});
+  // couches : menus dépliants
+  const layersBox=document.getElementById('layers');
+  const swatch=(key,c)=>{if(c==='pr')return '<span class="sw" style="border:2px dashed var(--pr)"></span>';if(c==='line')return '<span class="sw" style="border:1px solid var(--line)"></span>';
+    if(c)return `<span class="sw" style="background:${c}${key==='riv'?';height:4px':''}"></span>`;const s=ZS[key]||ZS.rnr;
+    return `<span class="sw" style="border:2px ${s[3]?'dashed':'solid'} ${s[0]};background:${s[1]==='none'?'transparent':s[1]}${s[1]==='none'?'':';opacity:.85'}"></span>`;};
+  layersBox.innerHTML=GROUPS.map(([g,items],gi)=>`<details class="grp" data-g="${gi}"${gi===0||gi===7?' open':''}><summary><input type="checkbox" class="all" aria-label="Tout ${esc(g)}"> ${esc(g)}</summary><div class="items">`+
+    items.map(([key,lab,c,on,keys])=>`<label><input type="checkbox" data-l="${key}" data-keys="${(keys||[key]).join(',')}" ${on?'checked':''}> ${swatch(key,c)} ${esc(lab)}</label>`).join('')+'</div></details>').join('');
+  const syncAll=()=>layersBox.querySelectorAll('details.grp').forEach(d=>{const cs=[...d.querySelectorAll('.items input')];const n=cs.filter(c=>c.checked).length;const a=d.querySelector('.all');a.checked=n===cs.length;a.indeterminate=n>0&&n<cs.length;});
+  layersBox.addEventListener('click',e=>{if(e.target.classList.contains('all'))e.stopPropagation();});
+  layersBox.addEventListener('change',e=>{if(e.target.classList.contains('all')){e.target.closest('details').querySelectorAll('.items input').forEach(c=>c.checked=e.target.checked);}syncAll();applyVis();});
+  const lay=k=>{const i=layersBox.querySelector(`input[data-l="${k}"]`);return !i||i.checked;};
+  function applyVis(){const ks=new Set();layersBox.querySelectorAll('.items input:checked').forEach(i=>i.dataset.keys.split(',').forEach(k=>ks.add(k)));
+    G.ens.classList.toggle('hide',!ks.has('ens'));G.dot.classList.toggle('hide',!ks.has('ens'));G.e54.classList.toggle('hide',!ks.has('ens54'));G.riv.classList.toggle('hide',!ks.has('riv'));G.prp.classList.toggle('hide',!ks.has('prp'));
+    G.wind.classList.toggle('hide',!ks.has('wind'));G.com.classList.toggle('hide',!ks.has('com'));G.epl.classList.toggle('hide',!ks.has('epci'));
+    zEls.forEach((p,i)=>p.classList.toggle('hide',!ks.has(Z[i].k)));setVB();}
+  const ensureOn=k=>{const i=[...layersBox.querySelectorAll('.items input')].find(x=>x.dataset.keys.split(',').includes(k));if(i&&!i.checked){i.checked=true;syncAll();applyVis();}};
+  // cadastre
+  const CAD=new Map(),cadLoading=new Map();const hint=document.getElementById('hint');const CADMAX=140;
+  const T32='0123456789ABCDEFGHIJKLMNOPQRSTUV',K32='abcdefghijklmnopqrstuvwxyzWXYZ@+';
+  function decRing(str,ox,oy){const out=[];let v=0,sh=1,px=0,py=0,odd=0;
+    for(const ch of str){const k=K32.indexOf(ch);if(k>=0){v+=k*sh;sh*=32;continue;}v+=T32.indexOf(ch)*sh;const d=v%2?-(v+1)/2:v/2;v=0;sh=1;
+      if(!odd){px+=d;odd=1;}else{py+=d;odd=0;out.push([(ox+px-P0.mx0)/P0.s,(P0.my1-(oy+py))/P0.s]);}}return out;}
+  const bundles=new Map();const getBundle=i=>{if(!bundles.has(i))bundles.set(i,fetch('cb/b'+i+'.json').then(r=>r.json()).catch(e=>{bundles.delete(i);throw e;}));return bundles.get(i);};
+  function ensureCommune(code){if(CAD.has(code))return Promise.resolve(CAD.get(code));if(cadLoading.has(code))return cadLoading.get(code);
+    const pr=getBundle(D.cad[code]).then(B=>{const j=B[code];const g=el('g',{},G.cad);const list=j.p.map((r,i)=>{const rings=r[4].split(';').filter(Boolean).map(s=>decRing(s,j.o[0],j.o[1]));
+      el('path',{d:rings.map(rg=>'M'+rg.map(p=>p[0].toFixed(2)+','+p[1].toFixed(2)).join(' ')+'Z').join(''),class:'parc','data-pc':code+':'+i},g);
+      return {s:r[0],n:r[1],ct:r[2],ab:r[3],rings};});CAD.set(code,list);cadLoading.delete(code);return list;}).catch(e=>{cadLoading.delete(code);throw e;});
+    cadLoading.set(code,pr);return pr;}
+  function cadUpdate(){const on=lay('cad');const show=on&&V[2]<CADMAX;G.cad.classList.toggle('hide',!show);hint.style.display=on&&!show&&V[2]<420?'block':'none';
+    if(!show)return;for(const c of D.com){if(D.cad[c.c]===undefined)continue;const b=c.bb;if(b[0]>V[0]+V[2]||b[2]<V[0]||b[1]>V[1]+V[3]||b[3]<V[1])continue;ensureCommune(c.c).catch(()=>{});}}
+  // vue
+  const setVB=()=>{svg.setAttribute('viewBox',V.join(' '));K=Math.min(svg.clientWidth/V[2],svg.clientHeight/V[3])||1;
+    G.txt.setAttribute('font-size',(13/K).toFixed(2));G.txt.setAttribute('stroke-width',(3/K).toFixed(2));
+    for(const c of G.dot.children)c.setAttribute('r',(3.2/K).toFixed(2));G.dot.setAttribute('stroke-width',(1/K).toFixed(2));G.dot.style.stroke='var(--land)';
+    for(const c of G.wind.children){c.setAttribute('r',(3.4/K).toFixed(2));c.setAttribute('stroke-width',(1.2/K).toFixed(2));}
+    pat.setAttribute('width',(7/K).toFixed(2));pat.setAttribute('height',(7/K).toFixed(2));pat.firstChild.setAttribute('y2',(7/K).toFixed(2));pat.firstChild.style.strokeWidth=(1.3/K).toFixed(2);
+    G.ctx.setAttribute('font-size',(11/K).toFixed(2));G.ctx.setAttribute('stroke-width',(3/K).toFixed(2));
+    G.etx.setAttribute('font-size',(14/K).toFixed(2));G.dlab.setAttribute('font-size',(15/K).toFixed(2));G.dlab.setAttribute('stroke-width',(4/K).toFixed(2));G.etx.setAttribute('stroke-width',(3.5/K).toFixed(2));
+    const w=V[2]*Math.max(1,(svg.clientWidth/svg.clientHeight)/(V[2]/V[3]));
+    G.ctx.classList.toggle('hide',w>320);G.dlab.classList.toggle('hide',w<250);G.txt.classList.toggle('hide',w<=320);G.etx.classList.toggle('hide',w>1100||w<60||!lay('epci'));
+    drawTiles();cadUpdate();};
+  // géométrie
+  const ringCache=new WeakMap();
+  function rings(o){if(ringCache.has(o))return ringCache.get(o);const rs=[];let bb=[1e9,1e9,-1e9,-1e9];
+    for(const part of o.p.split('M').filter(Boolean)){const r=part.replace('Z','').trim().split(' ').map(t=>t.split(',').map(Number)).filter(p=>p.length===2&&!isNaN(p[1]));
+      r.forEach(([x,y])=>{bb=[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)];});if(r.length>2)rs.push(r);}
+    const v={rs,bb};ringCache.set(o,v);return v;}
+  const bbOf=rs=>{let b=[1e9,1e9,-1e9,-1e9];rs.forEach(r=>r.forEach(([x,y])=>{b=[Math.min(b[0],x),Math.min(b[1],y),Math.max(b[2],x),Math.max(b[3],y)];}));return b;};
+  function pip(x,y,rs){let ins=false;for(const r of rs){for(let i=0,j=r.length-1;i<r.length;j=i++){const [xi,yi]=r[i],[xj,yj]=r[j];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}}return ins;}
+  function touches(prs,pbb,o){const z=rings(o);const b=z.bb;if(b[0]>pbb[2]||b[2]<pbb[0]||b[1]>pbb[3]||b[3]<pbb[1])return false;
+    for(const r of prs)for(const [x,y] of r)if(pip(x,y,z.rs))return true;
+    for(const r of z.rs)for(const [x,y] of r)if(x>=pbb[0]&&x<=pbb[2]&&y>=pbb[1]&&y<=pbb[3]&&pip(x,y,prs))return true;return false;}
+  const centroid=rs=>{let a=0,cx=0,cy=0;const r=rs[0];for(let i=0,j=r.length-1;i<r.length;j=i++){const f=r[j][0]*r[i][1]-r[i][0]*r[j][1];a+=f;cx+=(r[j][0]+r[i][0])*f;cy+=(r[j][1]+r[i][1])*f;}
+    return a?[cx/(3*a),cy/(3*a)]:r[0];};
+  const gmAt=(x,y)=>{const band=D.gm.find(g=>g.band&&pip(x,y,rings(g).rs));return band||D.gm.find(g=>!g.band&&pip(x,y,rings(g).rs));};
+  setVB();new ResizeObserver(setVB).observe(svg);syncAll();applyVis();
+  // fiches
+  let copyText='';
+  const acts=(x,y,z)=>`<div class="acts"><button id="copy">Copier le résumé</button><a class="gp" href="${esc(gpLink(x,y,z))}" target="_blank" rel="noopener">Voir sur Géoportail (photo HD + cadastre)</a></div>`;
+  const copyOnly='<div class="acts"><button id="copy">Copier le résumé</button></div>';
+  const clearOn=()=>svg.querySelectorAll('.on').forEach(n=>n.classList.remove('on'));
+  const mark=sel=>svg.querySelectorAll(sel).forEach(n=>n.classList.add('on'));
+  const ensLi=c=>{const e=ENS.get(c);return e?`<li><a href="#" class="lnk" data-go-e="${esc(c)}">${esc(e.n)}</a> <span class="ha">${esc(c)}</span></li>`:''};
+  const e54Li=c=>{const e=E54.get(c);return e?`<li><a href="#" class="lnk" data-go-f="${esc(c)}">${esc(e.n)}</a> <span class="ha">${esc(c)}</span></li>`:''};
+  const rivLi=c=>{const r=RIV.get(c);return r?`<li><a href="#" class="lnk" data-go-r="${esc(c)}">${esc(r.n)}</a> <span class="ha">${esc(c)}</span></li>`:''};
+  const depOf=c=>D.depn[c.slice(0,2)]||'';
+  function showEns(c){const e=ENS.get(c);clearOn();mark(`[data-e="${c}"]`);ensureOn('ens');
+    card.innerHTML=`<h3>${esc(e.n)}</h3><p class="k">ENS de la Meuse ${esc(e.c)} · ${esc(D.cat[e.t])}</p><ul><li>Surface : <b>${fmt(e.ha,2)} ha</b></li><li>Classé en ${esc(e.y)}</li><li>Communes : ${esc(e.co||'nombreuses (vallée de la Meuse)')}</li></ul>`+acts(e.x,e.yy,15);
+    copyText=`ENS ${e.c} « ${e.n} » (${D.cat[e.t].toLowerCase()}), ${fmt(e.ha,2)} ha, classé en ${e.y}.`;}
+  function showE54(c){const e=E54.get(c);clearOn();mark(`[data-e54="${c}"]`);ensureOn('ens54');
+    card.innerHTML=`<h3>${esc(e.n)}</h3><p class="k">ENS de Meurthe-et-Moselle ${esc(e.c)} · ${esc(D.mil54[e.t]||e.t)}</p><ul><li>Surface : <b>${fmt(e.ha,1)} ha</b></li><li>Statut départemental : ${e.st==='ACTIF'?'actif':'candidat'}</li></ul>`+acts(e.x,e.yy,15);
+    copyText=`ENS de Meurthe-et-Moselle ${e.c} « ${e.n} » (${(D.mil54[e.t]||e.t).toLowerCase()}), ${fmt(e.ha,1)} ha, statut ${e.st==='ACTIF'?'actif':'candidat'}.`;}
+  function showRiv(c){const r=RIV.get(c);clearOn();mark(`[data-r="${c}"]`);ensureOn('riv');
+    card.innerHTML=`<h3>${esc(r.n)}</h3><p class="k">Cours d'eau ENS ${esc(r.c)}</p><ul><li>Linéaire classé : <b>${fmt(r.km,1)} km</b></li><li>Classé en ${esc(r.y)}</li></ul>`+copyOnly;
+    copyText=`Cours d'eau ENS ${r.c} « ${r.n} », ${fmt(r.km,1)} km classés en ${r.y}.`;}
+  function showZ(i){const z=Z[i];clearOn();zEls.get(i)?.classList.add('on');ensureOn(z.k);
+    let extra='';if(z.k==='q')extra=`<li>Exploitant : ${esc(z.op)}</li><li>Commune : ${esc(z.co)}</li><li>Matériau : ${esc(z.mat)}</li><li>Production maximale autorisée : ${fmt(z.prod)} t/an</li>`;
+    if(z.k==='pp')extra=`<li>${esc(z.etat)}, lancé en ${esc(z.an)}</li><li>Porteur : ${esc(z.port)}</li>`;
+    if(z.k==='un')extra=`<li>Commune : ${esc(z.co)}</li>`;if(z.d)extra+=`<li>Date de protection : ${esc(z.d)}</li>`;
+    card.innerHTML=`<h3>${esc(z.n)}</h3><p class="k">${esc(LAB[z.k])}${z.id&&z.k!=='q'?' · '+esc(z.id):''}</p><ul><li>Surface totale : <b>${fmt(z.ha,z.ha<10?2:0)} ha</b></li>${extra}</ul>`+(z.u?`<p><a href="${esc(z.u)}" target="_blank" rel="noopener">Fiche INPN</a></p>`:'')+copyOnly;
+    copyText=`${LAB[z.k]} « ${z.n} »${z.id&&z.k!=='q'?' ('+z.id+')':''}, ${fmt(z.ha,z.ha<10?2:0)} ha.`;}
+  function showW(i){const w=WIND[i];clearOn();mark(`[data-w="${i}"]`);ensureOn('wind');
+    card.innerHTML=`<h3>Parc éolien ${esc(w.n)}</h3><p class="k">Éoliennes ${esc(ETAT[w.e])}</p><ul><li>${w.nb} éolienne${w.nb>1?'s':''}</li><li>Puissance cumulée : <b>${fmt(w.mw,1)} MW</b></li></ul>`+copyOnly;
+    copyText=`Parc éolien ${w.n} : ${w.nb} éolienne(s) ${ETAT[w.e]}, ${fmt(w.mw,1)} MW.`;}
+  function zoneBlocks(list,withHa){const byK={};list.forEach(it=>{const k=Z[it[0]].k;(byK[k]=byK[k]||[]).push(it);});
+    const html=ORDER.filter(k=>byK[k]).map(k=>`<p class="k">${esc(LAB[k])} (${byK[k].length})</p><ul>`+byK[k].map(([i,ha,edge])=>`<li${edge?' class="edge"':''}><a href="#" class="lnk" data-go-z="${i}">${esc(Z[i].n)}</a>${withHa?` <span class="ha">${edge?'contact en limite, ':''}${fmt(ha,ha<10?1:0)} ha</span>`:''}</li>`).join('')+'</ul>').join('');
+    const parts=ORDER.filter(k=>byK[k]).map(k=>{const l=byK[k].filter(x=>!x[2]);return l.length?LAB[k]+' : '+l.map(([i])=>Z[i].n+(Z[i].id&&!['q','sc','si'].includes(k)?' ('+Z[i].id+')':'')).join(', '):'';}).filter(Boolean);
+    return [html,parts];}
+  function showCom(c,zoom){const m=COM.get(c);if(!m)return;clearOn();mark(`[data-c="${c}"]`);const meuse=m.d==='55';
+    m.e.forEach(x=>mark(meuse?`[data-e="${x}"]`:`[data-e54="${x}"]`));m.r.forEach(x=>mark(`[data-r="${x}"]`));m.pr.forEach(x=>mark(`[data-id="${x}"]`));
+    m.z.forEach(([i])=>zEls.get(i)?.classList.add('on'));m.w.forEach(i=>mark(`[data-w="${i}"]`));
+    const [zHtml,zParts]=zoneBlocks(m.z,true);
+    const none=!m.e.length&&!m.r.length&&!m.pr.length&&!m.z.length;
+    const ep=D.epci[m.ep];const gmTxt=m.gm.map(([i,pc])=>`<span class="sw" style="background:${D.gm[i].col};display:inline-block;vertical-align:-2px;width:16px;height:12px"></span> secteur ${D.gm[i].id}${D.gm[i].band?' (bande vallée)':''} ${pc<100?pc+' %':''}`).join(' · ');
+    card.innerHTML=`<h3>${esc(m.n)}</h3><p class="k">${meuse?'':esc(depOf(m.c))+' · '}Code INSEE ${esc(m.c)} · ${fmt(m.pop)} hab.${ep?'<br>'+esc(ep.n):''}</p>`+(gmTxt?`<p class="k">Géomarché : ${gmTxt}</p>`:'')+
+      (none?'<p>Aucun ENS, paysage remarquable ni zonage recensé sur la commune.</p>':'')+
+      (m.e.length?`<p class="k">ENS ${meuse?'':'de Meurthe-et-Moselle '}(${m.e.length})</p><ul>${m.e.map(meuse?ensLi:e54Li).join('')}</ul>`:'')+
+      (m.r.length?`<p class="k">Cours d'eau ENS (${m.r.length})</p><ul>${m.r.map(rivLi).join('')}</ul>`:'')+
+      (m.pr.length?`<p class="k">Paysage remarquable</p><ul>${m.pr.map(x=>`<li>${esc(PR.get(x).n)}</li>`).join('')}</ul>`:'')+zHtml+
+      (m.w.length?`<p class="k">Parcs éoliens (${m.w.length})</p><ul>${m.w.map(i=>`<li><a href="#" class="lnk" data-go-w="${i}">${esc(WIND[i].n)}</a> <span class="ha">${esc(ETAT[WIND[i].e])}</span></li>`).join('')}</ul>`:'')+
+      (!meuse&&!['54'].includes(m.c.slice(0,2))?'<p class="muted">Les ENS de ce département ne sont pas publiés en données ouvertes.</p>':'')+acts(m.x,m.y,14);
+    const parts=[];
+    if(m.e.length)parts.push('ENS : '+m.e.map(x=>{const e=(meuse?ENS:E54).get(x);return `${e.n} (${x})`;}).join(', '));
+    if(m.r.length)parts.push("cours d'eau ENS : "+m.r.map(x=>`${RIV.get(x).n} (${x})`).join(', '));
+    if(m.pr.length)parts.push('paysage remarquable : '+m.pr.map(x=>PR.get(x).n).join(', '));
+    parts.push(...zParts);
+    if(m.w.length)parts.push('éolien : parc'+(m.w.length>1?'s ':' ')+m.w.map(i=>`${WIND[i].n} (${ETAT[WIND[i].e]})`).join(', '));
+    copyText=`Commune de ${m.n}${meuse?'':' ('+depOf(m.c)+')'}${ep?', '+ep.n:''} – `+(parts.length?parts.join(' ; ')+'.':'aucun ENS, paysage remarquable ni zonage recensé.');
+    if(zoom){const b=m.bb,w=Math.max(b[2]-b[0],60),h=Math.max(b[3]-b[1],60);zoomTo(b[0]-w*.6,b[1]-h*.6,w*2.2,h*2.2);}}
+  const fmtCt=m2=>{const ha=Math.floor(m2/10000),a=Math.floor(m2%10000/100),ca=m2%100;return `${ha} ha ${String(a).padStart(2,'0')} a ${String(ca).padStart(2,'0')} ca`;};
+  function showParc(code,i){const P=CAD.get(code)?.[i];if(!P)return;const m=COM.get(code);clearOn();svg.querySelector(`[data-pc="${code}:${i}"]`)?.classList.add('on');
+    const pbb=bbOf(P.rings);const [cx,cy]=centroid(P.rings);const g=gmAt(cx,cy);const ep=D.epci[m.ep];
+    const idu=code+(P.ab||'000')+P.s.padStart(2,'0')+P.n.padStart(4,'0');
+    const ens=D.ens.filter(e=>touches(P.rings,pbb,e)),e54=D.ens54.filter(e=>touches(P.rings,pbb,e)),prs=D.pr.filter(p=>touches(P.rings,pbb,p));
+    const zs=Z.filter(z=>ZS[z.k]&&touches(P.rings,pbb,z)).map(z=>[z.i,0,0]);
+    const [zHtml,zParts]=zoneBlocks(zs,false);
+    const ref=(P.ab?P.ab+' ':'')+P.s+' '+P.n;
+    card.innerHTML=`<h3>Parcelle ${esc(ref)}</h3><p class="k"><a href="#" class="lnk" data-go-c="${esc(code)}">${esc(m.n)}</a>${ep?' · '+esc(ep.n):''}</p>
+      <ul><li>Référence : section <b>${esc(P.s)}</b>, n° <b>${esc(P.n)}</b>${P.ab?`, préfixe ${esc(P.ab)} (commune déléguée)`:''}</li><li>Identifiant : ${esc(idu)}</li>
+      <li>Contenance cadastrale : <b>${fmtCt(P.ct)}</b> (${fmt(P.ct)} m²)</li>
+      ${g?`<li>Géomarché : <span class="sw" style="background:${g.col};display:inline-block;vertical-align:-2px;width:16px;height:12px"></span> secteur ${g.id}${g.band?' (bande vallée de la Meuse)':''} · prix/ha <span class="tbd">à compléter</span></li>`:''}</ul>`+
+      (ens.length?`<p class="k">ENS (${ens.length})</p><ul>${ens.map(e=>ensLi(e.c)).join('')}</ul>`:'')+
+      (e54.length?`<p class="k">ENS de Meurthe-et-Moselle</p><ul>${e54.map(e=>e54Li(e.c)).join('')}</ul>`:'')+
+      (prs.length?`<p class="k">Paysage remarquable</p><ul>${prs.map(p=>`<li>${esc(p.n)}</li>`).join('')}</ul>`:'')+zHtml+
+      (!ens.length&&!e54.length&&!prs.length&&!zs.length?'<p>Aucun ENS, paysage remarquable ni zonage ne touche cette parcelle.</p>':'')+
+      '<p class="muted">Croisement sur tracés simplifiés : en bordure de zonage, vérifie sur la couche d\'origine.</p>'+acts(cx,cy,18);
+    const parts=[];if(ens.length)parts.push('ENS : '+ens.map(e=>`${e.n} (${e.c})`).join(', '));if(e54.length)parts.push('ENS 54 : '+e54.map(e=>`${e.n} (${e.c})`).join(', '));if(prs.length)parts.push('paysage remarquable : '+prs.map(p=>p.n).join(', '));
+    parts.push(...zParts);
+    copyText=`Parcelle ${ref}, commune de ${m.n}${ep?' ('+ep.n+')':''}, ${fmtCt(P.ct)}`+(g?`, géomarché secteur ${g.id}`:'')+'. '+(parts.length?parts.join(' ; ')+'.':'Aucun ENS, paysage remarquable ni zonage ne touche la parcelle.');}
+  card.addEventListener('click',ev=>{const t=ev.target,d=t.dataset;if(t.matches('a.lnk'))ev.preventDefault();
+    if(d.goC)showCom(d.goC,false);else if(d.goE)showEns(d.goE);else if(d.goF)showE54(d.goF);else if(d.goR)showRiv(d.goR);else if(d.goZ)showZ(+d.goZ);else if(d.goW)showW(+d.goW);
+    else if(t.id==='copy'){try{navigator.clipboard.writeText(copyText).then(()=>{t.textContent='Copié';},()=>{t.textContent='Copie impossible';});}catch(_){t.textContent='Copie impossible';}}});
+  // recherche commune
+  const label=c=>c.d==='55'?c.n:`${c.n} (${c.d})`;
+  document.getElementById('coms').innerHTML=D.com.map(c=>`<option value="${esc(label(c))}">`).join('');
+  const byName=new Map();D.com.forEach(c=>{byName.set(norm(label(c)),c.c);if(!byName.has(norm(c.n)))byName.set(norm(c.n),c.c);});
+  const q=document.getElementById('q');
+  const go=()=>{const c=byName.get(norm(q.value));if(c)showCom(c,true);};
+  q.addEventListener('change',go);q.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
+  // recherche parcelle : commune puis section puis numéro
+  const pc=document.getElementById('pc'),ps=document.getElementById('ps'),pn=document.getElementById('pn'),pgo=document.getElementById('pgo'),pmsg=document.getElementById('pmsg'),pnums=document.getElementById('pnums');
+  const MC=D.com.filter(c=>c.d==='55'&&D.cad[c.c]!==undefined);
+  document.getElementById('pcoms').innerHTML=MC.map(c=>`<option value="${esc(c.n)}">`).join('');
+  const mByName=new Map(MC.map(c=>[norm(c.n),c.c]));let pCode=null;
+  const natural=(a,b)=>a.localeCompare(b,'fr',{numeric:true});
+  function resetP(msg){ps.innerHTML='';ps.disabled=true;pn.value='';pn.disabled=true;pgo.disabled=true;pnums.innerHTML='';pmsg.textContent=msg;}
+  function pickCommune(){const c=mByName.get(norm(pc.value));if(!c){pCode=null;resetP(pc.value?'Commune introuvable en Meuse.':'Choisis d\'abord une commune de la Meuse.');return;}
+    if(c===pCode)return;pCode=c;resetP('Chargement du cadastre…');
+    ensureCommune(c).then(list=>{if(pCode!==c)return;const secs=[...new Set(list.map(p=>(p.ab?p.ab+' ':'')+p.s))].sort(natural);
+      ps.innerHTML='<option value="">Section…</option>'+secs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');ps.disabled=false;pmsg.textContent=`${fmt(list.length)} parcelles, ${secs.length} sections.`;}).catch(()=>resetP('Cadastre indisponible pour cette commune.'));}
+  pc.addEventListener('change',pickCommune);pc.addEventListener('keydown',e=>{if(e.key==='Enter')pickCommune();});
+  ps.addEventListener('change',()=>{pn.value='';const list=CAD.get(pCode)||[];if(!ps.value){pn.disabled=true;pgo.disabled=true;return;}
+    const nums=list.filter(p=>(p.ab?p.ab+' ':'')+p.s===ps.value).map(p=>p.n).sort(natural);pnums.innerHTML=nums.map(n=>`<option value="${esc(n)}">`).join('');pn.disabled=false;pgo.disabled=false;pmsg.textContent=`${nums.length} parcelles dans la section ${ps.value}.`;pn.focus();});
+  function locate(){const list=CAD.get(pCode);if(!list||!ps.value)return;const num=pn.value.trim().replace(/^0+/,'')||'0';
+    const i=list.findIndex(p=>(p.ab?p.ab+' ':'')+p.s===ps.value&&p.n===num);
+    if(i<0){pmsg.textContent=`Pas de parcelle n° ${num} en section ${ps.value}.`;return;}
+    const b=bbOf(list[i].rings);const w=Math.max(b[2]-b[0],3),h=Math.max(b[3]-b[1],3);ensureOn('cad');zoomTo(b[0]-w*2,b[1]-h*2,w*5,h*5);
+    if(V[2]>=CADMAX)zoomTo(b[0]+w/2-CADMAX*.4,b[1]+h/2-CADMAX*.4,CADMAX*.8,CADMAX*.8);
+    showParc(pCode,i);pmsg.textContent='Parcelle localisée.';if(window.innerWidth<900)svg.scrollIntoView({behavior:'smooth'});}
+  pgo.addEventListener('click',locate);pn.addEventListener('keydown',e=>{if(e.key==='Enter')locate();});
+  // survol et clic
+  let moved=false,drag=null;const pts=new Map();let pinch=null;
+  const nameOf=d=>{if(d.pc){const [c,i]=d.pc.split(':');const P=CAD.get(c)?.[+i];return P?`Parcelle ${(P.ab?P.ab+' ':'')+P.s} ${P.n} · ${fmt(P.ct)} m²`:'';}
+    return d.e?ENS.get(d.e).n:d.e54?E54.get(d.e54).n:d.r?RIV.get(d.r).n:d.z?LAB[Z[+d.z].k]+' – '+Z[+d.z].n:d.w?'Parc éolien '+WIND[+d.w].n:d.c?label(COM.get(d.c)):'';};
+  svg.addEventListener('pointermove',ev=>{if(pts.size)return;const s=nameOf(ev.target.dataset);
+    if(s){const r=svg.getBoundingClientRect();tip.textContent=s;tip.style.display='block';tip.style.left=Math.min(ev.clientX-r.left+14,r.width-220)+'px';tip.style.top=(ev.clientY-r.top+14)+'px';}else tip.style.display='none';});
+  svg.addEventListener('pointerleave',()=>tip.style.display='none');
+  svg.addEventListener('click',ev=>{if(moved)return;const d=ev.target.dataset;
+    if(d.pc){const [c,i]=d.pc.split(':');showParc(c,+i);}else if(d.e)showEns(d.e);else if(d.e54)showE54(d.e54);else if(d.r)showRiv(d.r);else if(d.z)showZ(+d.z);else if(d.w)showW(+d.w);else if(d.c)showCom(d.c,false);});
+  // zoom et déplacement
+  function zoomTo(x,y,w,h){const ar=svg.clientWidth/svg.clientHeight||.6;const cx=x+w/2,cy=y+h/2;if(w/h>ar)h=w/ar;else w=h*ar;V=[cx-w/2,cy-h/2,w,h];setVB();}
+  function zoomAt(f,cx,cy){const nw=Math.min(Math.max(V[2]*f,LIVE?.4:3),Math.max(V0[2],V0[3]*svg.clientWidth/svg.clientHeight)*1.5),k=nw/V[2];V=[cx-(cx-V[0])*k,cy-(cy-V[1])*k,V[2]*k,V[3]*k];setVB();}
+  const toVB=ev=>{const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());};
+  svg.addEventListener('wheel',ev=>{ev.preventDefault();const p=toVB(ev);zoomAt(ev.deltaY>0?1.2:1/1.2,p.x,p.y);},{passive:false});
+  svg.addEventListener('pointerdown',ev=>{pts.set(ev.pointerId,ev);moved=false;tip.style.display='none';
+    if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)};drag=null;return;}
+    drag={x:ev.clientX,y:ev.clientY,v:V.slice()};});
+  svg.addEventListener('pointermove',ev=>{if(!pts.has(ev.pointerId))return;pts.set(ev.pointerId,ev);
+    if(pinch&&pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      const m=toVB({clientX:(a.clientX+b.clientX)/2,clientY:(a.clientY+b.clientY)/2});zoomAt(pinch.d/d,m.x,m.y);pinch.d=d;moved=true;return;}
+    if(!drag)return;const dx=ev.clientX-drag.x,dy=ev.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>4){moved=true;svg.classList.add('drag');}
+    if(moved){const s=Math.max(V[2]/svg.clientWidth,V[3]/svg.clientHeight);V=[drag.v[0]-dx*s,drag.v[1]-dy*s,V[2],V[3]];setVB();}});
+  const up=ev=>{pts.delete(ev.pointerId);if(pts.size<2)pinch=null;drag=null;svg.classList.remove('drag');};
+  svg.addEventListener('pointerup',up);svg.addEventListener('pointercancel',up);
+  const mid=()=>[V[0]+V[2]/2,V[1]+V[3]/2];
+  document.getElementById('zin').onclick=()=>zoomAt(1/1.5,...mid());
+  document.getElementById('zout').onclick=()=>zoomAt(1.5,...mid());
+  document.getElementById('zres').onclick=()=>zoomTo(...V0);
+  // légendes et chiffres
+  const cnt={};D.ens.forEach(e=>cnt[e.t]=(cnt[e.t]||0)+1);
+  document.getElementById('legend').innerHTML=Object.keys(D.cat).map(t=>`<li><span class="sw" style="background:${COL[t]}"></span>${esc(D.cat[t])}<b>${cnt[t]||0}</b></li>`).join('');
+  document.getElementById('gml').innerHTML=D.gm.map(g=>`<li><span class="sw" style="background:${g.col};width:28px"></span>Secteur ${g.id}${g.band?' (bande vallée de la Meuse)':''}<b>${fmt(g.km2)} km²</b></li>`).join('');
+  const ha=D.ens.reduce((a,e)=>a+e.ha,0);const nCad=Object.keys(D.cad).length;
+  document.getElementById('figs').innerHTML=[[fmt(D.ens.length),'ENS en Meuse, '+fmt(ha)+' ha'],[fmt(D.ens54.length),'ENS de Meurthe-et-Moselle dans les 30 km'],[fmt(D.com.length),'communes dont '+fmt(D.com.filter(c=>c.d==='55').length)+' en Meuse'],[fmt(nCad),'communes meusiennes avec cadastre'],[fmt(Z.filter(z=>z.k==='znieff1').length),'ZNIEFF de type 1 dans la zone'],[fmt(WIND.reduce((a,w)=>a+w.nb,0)),'éoliennes construites ou autorisées']]
+    .map(([a,b])=>`<div class="fig1"><strong>${esc(a)}</strong><span>${esc(b)}</span></div>`).join('');
+  document.getElementById('prl').innerHTML=D.pr.slice().sort((a,b)=>b.km2-a.km2).map(p=>`<li><button class="lnk" data-pr="${esc(p.id)}">${esc(p.n)}</button><small>${fmt(p.km2)} km² dans la zone${p.share<95?' · '+p.share+' % du périmètre':''}</small></li>`).join('');
+  document.getElementById('prl').addEventListener('click',ev=>{const id=ev.target.dataset.pr;if(!id)return;clearOn();mark(`[data-id="${id}"]`);ensureOn('prp');
+    const p=svg.querySelector(`[data-id="${id}"]`).getBBox();zoomTo(p.x-20,p.y-20,p.width+40,p.height+40);svg.scrollIntoView({behavior:'smooth',block:'center'});});
+  setBase('simple');zoomTo(...V0);
+});
+}
+</script>
+</body>
+</html>
